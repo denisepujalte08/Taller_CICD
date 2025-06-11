@@ -35,7 +35,7 @@ jobs: #estos son los flujos de trabajos
   
     - name: Revisar estilo Flake8
       run: |
-         flake8 . --max-line-length=100 > flake8.log
+         flake8 . --max-line-length=88 > flake8.log
          
   # y aca notifica SLACK
     - name: Notificar error de Flake en Slack

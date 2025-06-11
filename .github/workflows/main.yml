@@ -1,0 +1,13 @@
+name: Test CI pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mensaje de prueba
+        run: echo "🎉 GitHub Actions funcionando"

@@ -173,5 +173,3 @@ jobs: #estos son los flujos de trabajos
         curl -X POST -H 'Content-type: application/json' \
           --data "{\"text\":\"${MESSAGE}\"}" \
           ${{ secrets.SLACK_WEBHOOK_URL }}
-      
-  

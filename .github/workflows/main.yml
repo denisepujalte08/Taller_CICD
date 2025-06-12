@@ -73,9 +73,9 @@ jobs: #estos son los flujos de trabajos
 
     - name: Generar reporte de cobertura
       run: |
-          pip install coverage
-          coverage run -m pytest
-          coverage xml
+        pip install coverage
+        coverage run -m pytest
+        coverage xml
 
 #SonarCloud
     - name: Analizar con SonarCloud

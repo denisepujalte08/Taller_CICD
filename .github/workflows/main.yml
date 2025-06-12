@@ -17,6 +17,8 @@ jobs: #estos son los flujos de trabajos
     steps: #ACA VAN TODOS LOS PASOS A EJECUTARSE
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Disable shallow clone para SonarCloud
 
     - name: Configure Python
       uses: actions/setup-python@v5
@@ -81,56 +83,31 @@ jobs: #estos son los flujos de trabajos
             ${{ secrets.SLACK_WEBHOOK_URL }}
         fi
 
-
-
-    - name: Generar reporte de cobertura
-      run: |
-        pip install coverage
-        coverage run -m pytest
-        coverage xml
-
-#SonarCloud
-    - name: Analizar con SonarCloud
+#SonarCloud con Quality Gate automático
+    - name: Analizar con SonarCloud y verificar Quality Gate
       uses: SonarSource/sonarcloud-github-action@master
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=600
 
       # Acá notifica
-    - name: Notificar error SonarCloud en Slack
-      if: failure()
+    - name: Notificar resultado SonarCloud en Slack
+      if: always()
       run: |
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"❌ Falló el análisis de SonarCloud.\"}" \
-            ${{ secrets.SLACK_WEBHOOK_URL }}
+        if [ "${{ job.status }}" == "success" ]; then
+          MESSAGE="✅ SonarCloud: Quality Gate pasó exitosamente"
+        else
+          MESSAGE="❌ SonarCloud: Quality Gate falló"
+        fi
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"${MESSAGE}\"}" \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
 
-# Quality Gate
-    - name: Esperar resultados de Quality Gate
-      run: |
-          sleep 60  # Espera a que SonarCloud procese el análisis
-          
-# Verificar Quality Gate
-    - name: Verificar estado de Quality Gate en SonarCLoud
-      env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      run: |
-          PROJECT_KEY="denisepujalte08_Taller_CICD"
-          for i in {1..10}; do
-            STATUS=$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r .projectStatus.status)
-            echo "Intento $i - Quality Gate status: $STATUS"
-            if [ "$STATUS" != "null" ]; then
-              break
-            fi
-            sleep 10
-          done
-          if [ "$STATUS" != "OK" ]; then
-            curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"❌ Quality Gate fallido en SonarCloud para $PROJECT_KEY. Estado: $STATUS\"}" \
-              ${{ secrets.SLACK_WEBHOOK_URL }}
-            exit 1
-          fi
-            
-#notificar si falla SONARCLOUD
+#notificar resultado final
     - name: Notificar a Slack
       if: always()
       run: |

@@ -51,11 +51,11 @@ jobs: #estos son los flujos de trabajos
         pip install coverage
         set +e
         coverage run -m pytest --tb=short > pytest.log
-        TEST_EXIT_CODE=$?
-        coverage xml
+        STATUS=$?
         set -e
+        coverage xml
 
-        if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+        if [ "$STATUS" -ne 0 ]; then
           echo "❌ Tests fallaron"
           ERROR_MSG=$(grep -A 5 -E 'FAILURES|ERRORS' pytest.log | head -20 | sed ':a;N;$!ba;s/\n/\\n/g')
           curl -X POST -H 'Content-type: application/json' \
@@ -68,6 +68,7 @@ jobs: #estos son los flujos de trabajos
             --data "{\"text\":\"✅ Todos los tests pasaron correctamente.\"}" \
             ${{ secrets.SLACK_WEBHOOK_URL }}
         fi
+
 
 
     - name: Generar reporte de cobertura

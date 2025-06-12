@@ -1,28 +1,175 @@
 name: CI pipeline
 
-on:
+on: 
   push:
+    branches:
+      - main #esto es lo qe se va a ejecutar cuando se haga un push en la rama 'main'
+        #y solo esta rama
+  pull_request:
     branches:
       - main
 
-jobs:
+jobs: #estos son los flujos de trabajos
   build-check:
+    name: Build
+    runs-on: ubuntu-latest #github usa una maquina virtual
+
+    steps: #ACA VAN TODOS LOS PASOS A EJECUTARSE
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure Python
+      uses: actions/setup-python@v5
+      with: 
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip #con esto mantenemos los pip actualizados
+        pip install -r requirements.txt
+
+#esto lo que hace es revisar los errores simples del codigo
+  #PEP 8: cantidad de caracteres, lineas, etc
+  # errores de programación comunes: variables no usadas, imports, etc
+  # también mide la complejidad del codigo
+  
+    - name: Revisar estilo Flake8
+      run: |
+         flake8 . --max-line-length=88 > flake8.log
+         
+  # y aca notifica SLACK
+    - name: Notificar error de Flake en Slack
+      if: failure()
+      run: |
+        ERROR_MSG=$(head -20 flake8.log | sed ':a;N;$!ba;s/\n/\\n/g')
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"❌ Problema encontrado con Flake\n\`\`\`${ERROR_MSG}\`\`\`\"}" \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Ejecutar tests con coverage y notificar si fallan
+      run: |
+          pip install coverage
+          set +e
+          coverage run -m pytest --tb=short > pytest.log
+          STATUS=$?
+          set -e
+
+          coverage xml
+
+          if [ "$STATUS" -ne 0 ]; then
+            ERROR_MSG=$(grep -A 5 -E 'FAILURES|ERRORS' pytest.log | head -20 | sed ':a;N;$!ba;s/\n/\\n/g')
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"❌ Falló un test en pytest:\n\`\`\`${ERROR_MSG}\`\`\`\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+            exit 1
+          else
+            echo "✅ Tests pasaron correctamente"
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"✅ Todos los tests pasaron correctamente.\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+            exit 0
+          fi
+
+    - name: Generar reporte de cobertura
+      run: |
+          pip install coverage
+          coverage run -m pytest
+          coverage xml
+
+#SonarCloud
+    - name: Analizar con SonarCloud
+      uses: SonarSource/sonarqube-scan-action@v5.0.0
+      env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Acá notifica
+    - name: Notificar error SonarCloud en Slack
+      if: failure()
+      run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ Falló el análisis de SonarCloud.\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+
+# Quality Gate
+    - name: Esperar resultados de Quality Gate
+      run: |
+          sleep 60  # Espera a que SonarCloud procese el análisis
+          
+# Verificar Quality Gate
+    - name: Verificar estado de Quality Gate en SonarCLoud
+      env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+          PROJECT_KEY="denisepujalte08_Taller_CICD"
+          for i in {1..10}; do
+            STATUS=$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r .projectStatus.status)
+            echo "Intento $i - Quality Gate status: $STATUS"
+            if [ "$STATUS" != "null" ]; then
+              break
+            fi
+            sleep 10
+          done
+          if [ "$STATUS" != "OK" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"❌ Quality Gate fallido en SonarCloud para $PROJECT_KEY. Estado: $STATUS\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+            exit 1
+          fi
+            
+#notificar si falla SONARCLOUD
+    - name: Notificar a Slack
+      if: always()
+      run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            MESSAGE="✅ Build exitosa y lista para deploy"
+          else
+            MESSAGE="❌ Build fallida. Revisar errores"
+          fi
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"${MESSAGE}\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  deploy:
+    name: Deployment with Docker
+    needs: build-check #este job solose va a ejecutar si build-and-test pasó
     runs-on: ubuntu-latest
+    # esto va a hacer que se despliegue solo si el push fue en main
+    if: github.ref == 'refs/heads/main' 
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+  #Descarga el código para que Docker lo pueda construir
+    - name: Checkout for Docker Build
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: Install Docker and Build Application Image
+      run: |
+        echo "Building Docker Image..."
+        # el echo imprime jeje
+        docker build -t cd-docker:latest .
+        echo "Docker image built: cd-docker:latest"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8
+    - name: Stop and Remove Old Container (if exists)
+      id: stop_old_container
+      continue-on-error: true #si el contenedor no existe no hace esto
+      run: |
+        docker stop  cd-docker-container
+        docker rm cd-docker-container
+        echo "Old container stopped and removed."
 
-      - name: Run Flake8
-        run: |
-          python -m flake8 .
+    - name: Run New Docker Container
+      id: run_new_container
+      run: |
+        docker run -d --name cd-docker-container -p 5000:5000 cd-docker:latest
+        echo "New Docker container 'cd-docker-container' started."
+
+    - name: Notify Deployment Status to Slack
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+            MESSAGE="🎉 ¡Despliegue exitoso con Docker para ${{ github.repository }} (Branch: ${{ github.ref_name }})! Aplicación lista."
+        else
+            MESSAGE="❌ ¡Despliegue con Docker fallido para ${{ github.repository }} (Branch: ${{ github.ref_name }})! Revisa los logs de GitHub Actions."
+        fi
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"${MESSAGE}\"}" \
+          ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -48,27 +48,27 @@ jobs: #estos son los flujos de trabajos
 
     - name: Ejecutar tests con coverage y notificar si fallan
       run: |
-          pip install coverage
-          set +e
-          coverage run -m pytest --tb=short > pytest.log
-          STATUS=$?
-          set -e
+        pip install coverage
+        set +e
+        coverage run -m pytest --tb=short > pytest.log
+        TEST_EXIT_CODE=$?
+        coverage xml
+        set -e
 
-          coverage xml
+        if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+          echo "❌ Tests fallaron"
+          ERROR_MSG=$(grep -A 5 -E 'FAILURES|ERRORS' pytest.log | head -20 | sed ':a;N;$!ba;s/\n/\\n/g')
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ Falló un test en pytest:\n\`\`\`${ERROR_MSG}\`\`\`\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+          exit 1
+        else
+          echo "✅ Todos los tests pasaron correctamente"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ Todos los tests pasaron correctamente.\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+        fi
 
-          if [ "$STATUS" -ne 0 ]; then
-            ERROR_MSG=$(grep -A 5 -E 'FAILURES|ERRORS' pytest.log | head -20 | sed ':a;N;$!ba;s/\n/\\n/g')
-            curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"❌ Falló un test en pytest:\n\`\`\`${ERROR_MSG}\`\`\`\"}" \
-              ${{ secrets.SLACK_WEBHOOK_URL }}
-            exit 1
-          else
-            echo "✅ Tests pasaron correctamente"
-            curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"✅ Todos los tests pasaron correctamente.\"}" \
-              ${{ secrets.SLACK_WEBHOOK_URL }}
-            exit 0
-          fi
 
     - name: Generar reporte de cobertura
       run: |

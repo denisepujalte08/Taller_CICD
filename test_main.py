@@ -35,7 +35,6 @@ def test_float_menor():
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
-    app.config['WTF_CSRF_ENABLED'] = False  # Deshabilitar CSRF para tests
     with app.test_client() as client:
         yield client
 
@@ -80,6 +79,14 @@ def test_api_edad_float(client):
     assert data['mayor_de_edad'] is False
 
 
+def test_api_edad_invalida(client):
+    """Test API endpoint con edad inválida"""
+    response = client.get('/mayor?edad=texto')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+
+
 def test_api_health_check(client):
     """Test endpoint de health check"""
     response = client.get('/health')
@@ -87,6 +94,15 @@ def test_api_health_check(client):
     data = response.get_json()
     assert data['status'] == 'healthy'
     assert data['service'] == 'edad-verificador'
+    assert data['version'] == '1.0.0'
+
+
+def test_api_endpoint_no_encontrado(client):
+    """Test endpoint que no existe"""
+    response = client.get('/no-existe')
+    assert response.status_code == 404
+    data = response.get_json()
+    assert 'error' in data
 
 
 def test_valores_extremos():
@@ -95,3 +111,10 @@ def test_valores_extremos():
     assert not es_mayor_de_edad(-100)  # Negativo extremo
     assert es_mayor_de_edad(18.0)  # Float exacto
     assert not es_mayor_de_edad(17.999)  # Muy cerca pero menor
+
+
+def test_tipos_datos():
+    """Test con diferentes tipos de datos"""
+    assert es_mayor_de_edad(18)  # int
+    assert es_mayor_de_edad(18.0)  # float
+    assert not es_mayor_de_edad(17)  # int menor

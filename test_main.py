@@ -1,4 +1,4 @@
-from par import es_mayor_de_edad
+from main import es_mayor_de_edad
 
 
 def test_mayor_positivo():

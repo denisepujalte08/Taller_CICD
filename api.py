@@ -15,13 +15,13 @@ app.config['SECRET_KEY'] = os.environ.get(secret_key_name, fallback_secret)
 def verificar():
     """
     Endpoint público para verificar si una persona es mayor de edad.
-    
+
     Parámetros:
         edad (float): Edad a verificar
-        
+
     Returns:
         JSON: {"mayor_de_edad": boolean}
-        
+
     Esta es una API de solo lectura que no requiere protección CSRF
     ya que no modifica datos ni estado del servidor.
     """
@@ -40,12 +40,12 @@ def verificar():
 def health_check():
     """
     Endpoint de verificación del estado del servicio.
-    
+
     Returns:
         JSON: Estado del servicio
     """
     return jsonify({
-        "status": "healthy", 
+        "status": "healthy",
         "service": "edad-verificador",
         "version": "1.0.0"
     })
@@ -66,4 +66,4 @@ def internal_error(error):
 if __name__ == "__main__":
     # Configuración para desarrollo
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(host="0.0.0.0", port=5000, debug=debug_mode)
+    app.run(host="0.0.0.0", port=5000, debug=debug_mode) 

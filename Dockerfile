@@ -1,5 +1,5 @@
 # Imagen oficial de Python, se usa "slim" porque es mas pequeña
-FROM python:3.10-slim-buster
+FROM python:3.10
 
 # Dentro del contenedor establecemos el directorio de trabajo
 # Acá se van a copiar mis archivos y se EJECUTA LA APPPPP
@@ -26,5 +26,4 @@ EXPOSE 5000
 #o sea que este contenedor escucha en el puerto 5000
 
 # El comando para iniciar la aplicación cuando el contenedor se ejecute
-CMD ["python", "main.py"]
-
+CMD ["python", "api.py"]

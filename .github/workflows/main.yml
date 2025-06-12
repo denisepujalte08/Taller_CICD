@@ -34,8 +34,20 @@ jobs: #estos son los flujos de trabajos
   # también mide la complejidad del codigo
   
     - name: Revisar estilo Flake8
+      id: flake8_check # Asignamos un ID a este paso para referenciar su resultado
       run: |
-         flake8 . --max-line-length=88 > flake8.log
+        set +e # Deshabilita la salida inmediata por error
+        flake8 . --max-line-length=88 > flake8.log
+        FLAKE8_STATUS=$? # Captura el código de salida de Flake8
+        set -e # Vuelve a habilitar la salida inmediata por error
+
+        # Si Flake8 encontró problemas, imprime el log y falla el job
+        if [ "$FLAKE8_STATUS" -ne 0 ]; then
+          echo "Flake8 found style issues. See flake8.log for details."
+          cat flake8.log # Muestra el contenido del log en la salida del workflow
+          exit 1 # Falla el job para detener el pipeline
+        fi
+        echo "Flake8 check passed."
          
   # y aca notifica SLACK
     - name: Notificar error de Flake en Slack

@@ -8,7 +8,7 @@ csrf = CSRFProtect(app)
 
 
 @app.route("/mayor", methods=["GET"])
-@csrf.exempt  # Para APIs GET públicas, excluimos CSRF
+@csrf.exempt  # Para APIs GETsasdsd públicas, excluimos CSRF
 def verificar():
     edad = float(request.args.get("edad", 0))
     resultado = es_mayor_de_edad(edad)

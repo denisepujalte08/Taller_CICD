@@ -3,4 +3,3 @@ def es_mayor_de_edad(edad: int) -> bool:
 
 
 print("este es un cambio que hago")
-print("este es")
